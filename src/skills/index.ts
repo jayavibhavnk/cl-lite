@@ -52,6 +52,48 @@ const BUILT_IN_SKILLS: Skill[] = [
       "You are writing tests. Focus on critical paths and edge cases. Make tests readable and maintainable. Ensure tests actually verify the behavior.",
     enabled: true,
   },
+  {
+    name: "architect",
+    description: "Design system architecture and structure",
+    prompt:
+      "You are designing a system architecture. Consider: separation of concerns, dependency direction, data flow, and future extensibility. Prefer simple designs over complex ones. Document your decisions with reasoning.",
+    enabled: true,
+  },
+  {
+    name: "optimize",
+    description: "Improve performance and efficiency",
+    prompt:
+      "You are optimizing code for performance. First, measure to identify bottlenecks. Then focus on the biggest wins. Consider time complexity, memory usage, and I/O. Always verify optimizations don't break correctness.",
+    enabled: true,
+  },
+  {
+    name: "security",
+    description: "Review code for security vulnerabilities",
+    prompt:
+      "You are reviewing code for security issues. Look for: injection attacks, authentication/authorization problems, data exposure, insecure dependencies, and common OWASP Top 10 issues. Be thorough and specific about remediation.",
+    enabled: true,
+  },
+  {
+    name: "git",
+    description: "Handle git operations and workflows",
+    prompt:
+      "You are handling git operations. Use clear commit messages. Create feature branches for new work. Keep commits atomic and focused. Help resolve merge conflicts by understanding both sides.",
+    enabled: true,
+  },
+  {
+    name: "search",
+    description: "Search the codebase for patterns",
+    prompt:
+      "You are searching the codebase. Use glob patterns to find files and grep to search content. Report findings clearly with file paths and line numbers. Summarize what you found.",
+    enabled: true,
+  },
+  {
+    name: "learn",
+    description: "Learn and remember project context",
+    prompt:
+      "You are learning about the project. Explore files, understand patterns, and build a mental model. Remember key facts for future reference. Store important learnings in semantic memory.",
+    enabled: true,
+  },
 ];
 
 // Load skills from .cl-lite/skills directory

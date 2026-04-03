@@ -79,13 +79,9 @@ export class Agent {
       for (const toolCall of toolCalls) {
         const result = await this.executeTool(toolCall);
         messages.push({
-          role: "user",
-          content: JSON.stringify({
-            type: "tool_result",
-            tool_use_id: toolCall.id,
-            content: result.content,
-            is_error: result.is_error,
-          }),
+          role: "tool",
+          content: result.content,
+          tool_call_id: toolCall.id,
         });
       }
     }

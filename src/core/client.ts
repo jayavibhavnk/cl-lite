@@ -182,7 +182,11 @@ class OpenAICompatibleClient implements LLMClient {
 
     for (const m of otherMessages) {
       if (typeof m.content === "string") {
-        result.push({ role: m.role, content: m.content });
+        const msg: Record<string, unknown> = { role: m.role, content: m.content };
+        if (m.role === "tool" && m.tool_call_id) {
+          msg.tool_call_id = m.tool_call_id;
+        }
+        result.push(msg);
       } else {
         const textParts = m.content
           .filter((b: ContentBlock) => b.type === "text")

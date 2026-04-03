@@ -1,6 +1,6 @@
 import { Config } from "../../types/index.js";
 
-export type LLMProvider = "anthropic" | "openai" | "openai-compatible";
+export type LLMProvider = "anthropic" | "openai" | "openai-compatible" | "minimax";
 
 export interface ProviderConfig {
   provider: LLMProvider;
@@ -14,10 +14,20 @@ export function getProviderConfig(): ProviderConfig {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
+  const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
   const MODEL_NAME = process.env.MODEL_NAME || "claude-3-haiku-20240307";
   const MAX_TOKENS = parseInt(process.env.MAX_TOKENS || "4096", 10);
 
   // Determine provider based on API keys and env vars
+  if (MINIMAX_API_KEY) {
+    return {
+      provider: "minimax",
+      apiKey: MINIMAX_API_KEY,
+      modelName: MODEL_NAME,
+      maxTokens: MAX_TOKENS,
+    };
+  }
+
   if (OPENAI_BASE_URL || OPENAI_API_KEY) {
     return {
       provider: "openai-compatible",

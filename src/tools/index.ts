@@ -4,3 +4,5 @@ export { writeTool } from "./write.js";
 export { editTool } from "./edit.js";
 export { globTool } from "./glob.js";
 export { grepTool } from "./grep.js";
+export { webFetchTool } from "./webfetch.js";
+export { webSearchTool } from "./websearch.js";

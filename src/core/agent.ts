@@ -22,15 +22,20 @@ export interface AgentConfig {
 export class Agent {
   private client;
   private toolsMap;
+  private selfImprover: SelfImprover;
+  private config: AgentConfig;
 
-  constructor(private config: AgentConfig) {
+  constructor(config: AgentConfig) {
+    this.config = config;
     this.client = createLLMClient(config.providerConfig);
     this.toolsMap = new Map(config.tools.map((t) => [t.name, t]));
+    this.selfImprover = new SelfImprover(config.memory);
   }
 
   async run(userMessage: string): Promise<string> {
     const maxIterations = this.config.maxIterations || 20;
     let iterations = 0;
+    let lastError: string | null = null;
 
     // Add user message to memory
     this.config.memory.addUserMessage(userMessage);
@@ -54,36 +59,61 @@ export class Agent {
         max_tokens: this.config.providerConfig.maxTokens,
       };
 
-      const response = await this.client.complete(request);
+      try {
+        const response = await this.client.complete(request);
 
-      // Add assistant response to messages
-      const assistantMessage = this.blockToMessage(response.content, "assistant");
-      messages.push(assistantMessage);
+        // Add assistant response to messages
+        const assistantMessage = this.blockToMessage(response.content, "assistant");
+        messages.push(assistantMessage);
 
-      // Check for tool calls
-      const toolCalls = response.content.filter(
-        (b: ContentBlock) => b.type === "tool_use"
-      ) as ContentBlock[];
+        // Check for tool calls
+        const toolCalls = response.content.filter(
+          (b: ContentBlock) => b.type === "tool_use"
+        ) as ContentBlock[];
 
-      if (toolCalls.length === 0) {
-        // No tool calls, return the response
-        const text = response.content
-          .filter((b: ContentBlock) => b.type === "text")
-          .map((b: ContentBlock) => (b as { text: string }).text)
-          .join("");
-        this.config.memory.addAssistantMessage(text);
-        return text;
-      }
+        if (toolCalls.length === 0) {
+          // No tool calls, return the response
+          const text = response.content
+            .filter((b: ContentBlock) => b.type === "text")
+            .map((b: ContentBlock) => (b as { text: string }).text)
+            .join("");
+          this.config.memory.addAssistantMessage(text);
 
-      // Execute tool calls
-      for (const toolCall of toolCalls) {
-        const result = await this.executeTool(toolCall);
-        const toolId = toolCall.id || `call_${Date.now()}`;
-        messages.push({
-          role: "tool",
-          content: result.content,
-          tool_call_id: toolId,
-        });
+          // Learn from successful completion
+          if (lastError) {
+            this.selfImprover.learnFromSuccess(userMessage, "Completed after retry");
+            lastError = null;
+          } else {
+            this.selfImprover.learnFromSuccess(userMessage, "Completed successfully");
+          }
+
+          return text;
+        }
+
+        // Execute tool calls
+        for (const toolCall of toolCalls) {
+          const result = await this.executeTool(toolCall);
+          const toolId = toolCall.id || `call_${Date.now()}`;
+          messages.push({
+            role: "tool",
+            content: result.content,
+            tool_call_id: toolId,
+          });
+
+          // Track errors
+          if (result.is_error) {
+            lastError = result.content;
+            this.selfImprover.learnFromFailure(
+              `${toolCall.name} with input ${JSON.stringify(toolCall.input)}`,
+              result.content
+            );
+          }
+        }
+      } catch (error) {
+        const err = error as Error;
+        lastError = err.message;
+        this.selfImprover.learnFromFailure(userMessage, err.message);
+        throw error;
       }
     }
 

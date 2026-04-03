@@ -210,6 +210,88 @@ class OpenAICompatibleClient implements LLMClient {
   }
 }
 
+// MiniMax client (uses OpenAI-compatible API)
+class MiniMaxClient implements LLMClient {
+  constructor(private apiKey: string) {}
+
+  async complete(request: LLMRequest): Promise<LLMResponse> {
+    const baseUrl = "https://api.minimax.chat/v1";
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: request.model,
+        messages: this.convertMessages(request.messages),
+        tools: request.tools?.map((t) => ({
+          type: "function",
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.inputSchema,
+          },
+        })),
+        max_tokens: request.max_tokens,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`MiniMax API error: ${response.status} ${error}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices[0];
+
+    return {
+      content: this.convertChoice(choice),
+      stop_reason: choice.finish_reason,
+      model: data.model,
+    };
+  }
+
+  private convertMessages(messages: Message[]): object[] {
+    return messages
+      .filter((m) => m.role !== "system")
+      .map((m) => {
+        if (typeof m.content === "string") {
+          return { role: m.role, content: m.content };
+        }
+        const text = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+        return { role: m.role, content: text };
+      });
+  }
+
+  private convertChoice(choice: {
+    message?: { content?: string; tool_calls?: object[] };
+    finish_reason?: string;
+  }): ContentBlock[] {
+    const blocks: ContentBlock[] = [];
+
+    if (choice.message?.content) {
+      blocks.push({ type: "text", text: choice.message.content });
+    }
+
+    if (choice.message?.tool_calls) {
+      for (const tc of choice.message.tool_calls as {
+        id: string;
+        function: { name: string; arguments: string };
+      }[]) {
+        blocks.push({
+          type: "tool_use",
+          id: tc.id,
+          name: tc.function.name,
+          input: JSON.parse(tc.function.arguments),
+        });
+      }
+    }
+
+    return blocks;
+  }
+}
+
 // Factory function to create LLM client
 export function createLLMClient(config: ProviderConfig): LLMClient {
   switch (config.provider) {
@@ -225,6 +307,12 @@ export function createLLMClient(config: ProviderConfig): LLMClient {
         config.apiKey,
         config.baseUrl || "https://api.openai.com/v1"
       );
+
+    case "minimax":
+      if (!config.apiKey) {
+        throw new Error("MINIMAX_API_KEY environment variable is required");
+      }
+      return new MiniMaxClient(config.apiKey);
 
     default:
       throw new Error(`Unsupported provider: ${config.provider}`);

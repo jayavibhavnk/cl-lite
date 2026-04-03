@@ -20,11 +20,13 @@ export function getProviderConfig(): ProviderConfig {
 
   // Determine provider based on API keys and env vars
   if (MINIMAX_API_KEY) {
+    // MiniMax supports large contexts, default to 100k tokens
+    const miniMaxTokens = parseInt(process.env.MAX_TOKENS || "100000", 10);
     return {
       provider: "minimax",
       apiKey: MINIMAX_API_KEY,
       modelName: MODEL_NAME,
-      maxTokens: MAX_TOKENS,
+      maxTokens: Math.min(miniMaxTokens, 100000),
     };
   }
 

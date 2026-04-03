@@ -1,4 +1,4 @@
-import { Tool, ToolResult } from "../../types/index.js";
+import { Tool, ToolResult } from "../types/index.js";
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { mkdirSync } from "fs";

@@ -1,4 +1,4 @@
-import { Tool, ToolResult } from "../../types/index.js";
+import { Tool, ToolResult } from "../types/index.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 

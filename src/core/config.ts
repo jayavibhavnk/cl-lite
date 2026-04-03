@@ -1,4 +1,4 @@
-import { Config } from "../../types/index.js";
+import { Config } from "../types/index.js";
 
 export type LLMProvider = "anthropic" | "openai" | "openai-compatible" | "minimax";
 

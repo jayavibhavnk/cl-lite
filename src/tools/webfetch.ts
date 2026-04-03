@@ -1,4 +1,4 @@
-import { Tool, ToolResult } from "../../types/index.js";
+import { Tool, ToolResult } from "../types/index.js";
 
 export const webFetchTool: Tool = {
   name: "WebFetch",

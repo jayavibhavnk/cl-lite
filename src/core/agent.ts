@@ -1,11 +1,10 @@
 import {
   Tool,
-  ToolCall,
   ToolResult,
   Message,
   ContentBlock,
   LLMRequest,
-} from "../../types/index.js";
+} from "../types/index.js";
 import { createLLMClient } from "./client.js";
 import { ProviderConfig } from "./config.js";
 import { MemoryManager } from "./memory.js";
@@ -21,10 +20,13 @@ export interface AgentConfig {
 }
 
 export class Agent {
-  private client = createLLMClient(this.config.providerConfig);
-  private toolsMap = new Map(this.config.tools.map((t) => [t.name, t]));
+  private client;
+  private toolsMap;
 
-  constructor(private config: AgentConfig) {}
+  constructor(private config: AgentConfig) {
+    this.client = createLLMClient(config.providerConfig);
+    this.toolsMap = new Map(config.tools.map((t) => [t.name, t]));
+  }
 
   async run(userMessage: string): Promise<string> {
     const maxIterations = this.config.maxIterations || 20;
@@ -60,14 +62,14 @@ export class Agent {
 
       // Check for tool calls
       const toolCalls = response.content.filter(
-        (b) => b.type === "tool_use"
+        (b: ContentBlock) => b.type === "tool_use"
       ) as ContentBlock[];
 
       if (toolCalls.length === 0) {
         // No tool calls, return the response
         const text = response.content
-          .filter((b) => b.type === "text")
-          .map((b) => (b as { text: string }).text)
+          .filter((b: ContentBlock) => b.type === "text")
+          .map((b: ContentBlock) => (b as { text: string }).text)
           .join("");
         this.config.memory.addAssistantMessage(text);
         return text;

@@ -4,8 +4,31 @@ import {
   LLMResponse,
   Message,
   ContentBlock,
-} from "../../types/index.js";
-import { ProviderConfig, LLMProvider } from "./config.js";
+  Tool,
+} from "../types/index.js";
+import { ProviderConfig } from "./config.js";
+
+// Anthropic API response type
+interface AnthropicResponse {
+  content: object[];
+  stop_reason: string;
+  model: string;
+}
+
+// OpenAI API response type
+interface OpenAIResponse {
+  choices: Array<{
+    message: {
+      content?: string;
+      tool_calls?: Array<{
+        id: string;
+        function: { name: string; arguments: string };
+      }>;
+    };
+    finish_reason: string;
+  }>;
+  model: string;
+}
 
 // Anthropic API client
 class AnthropicClient implements LLMClient {
@@ -24,7 +47,7 @@ class AnthropicClient implements LLMClient {
         model: request.model,
         max_tokens: request.max_tokens,
         messages: this.convertMessages(request.messages),
-        tools: request.tools?.map((t) => ({
+        tools: request.tools?.map((t: Tool) => ({
           name: t.name,
           description: t.description,
           input_schema: t.inputSchema,
@@ -37,7 +60,7 @@ class AnthropicClient implements LLMClient {
       throw new Error(`Anthropic API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as AnthropicResponse;
 
     return {
       content: this.convertResponseContent(data.content),
@@ -55,7 +78,7 @@ class AnthropicClient implements LLMClient {
         }
         return {
           role: m.role,
-          content: m.content.map((block) => {
+          content: m.content.map((block: ContentBlock) => {
             if (block.type === "text") {
               return { type: "text", text: block.text };
             }
@@ -116,7 +139,7 @@ class OpenAICompatibleClient implements LLMClient {
       body: JSON.stringify({
         model: request.model,
         messages: this.convertMessages(request.messages),
-        tools: request.tools?.map((t) => ({
+        tools: request.tools?.map((t: Tool) => ({
           type: "function",
           function: {
             name: t.name,
@@ -133,7 +156,7 @@ class OpenAICompatibleClient implements LLMClient {
       throw new Error(`OpenAI API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as OpenAIResponse;
     const choice = data.choices[0];
 
     return {
@@ -153,7 +176,7 @@ class OpenAICompatibleClient implements LLMClient {
         role: "system",
         content: typeof systemMessage.content === "string"
           ? systemMessage.content
-          : systemMessage.content.map((b) => b.text).join(""),
+          : systemMessage.content.map((b: ContentBlock) => b.text || "").join(""),
       });
     }
 
@@ -162,11 +185,11 @@ class OpenAICompatibleClient implements LLMClient {
         result.push({ role: m.role, content: m.content });
       } else {
         const textParts = m.content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text);
+          .filter((b: ContentBlock) => b.type === "text")
+          .map((b: ContentBlock) => b.text || "");
         const toolCalls = m.content
-          .filter((b) => b.type === "tool_use")
-          .map((b) => ({
+          .filter((b: ContentBlock) => b.type === "tool_use")
+          .map((b: ContentBlock) => ({
             id: b.id,
             type: "function",
             function: { name: b.name, arguments: JSON.stringify(b.input) },
@@ -225,7 +248,7 @@ class MiniMaxClient implements LLMClient {
       body: JSON.stringify({
         model: request.model,
         messages: this.convertMessages(request.messages),
-        tools: request.tools?.map((t) => ({
+        tools: request.tools?.map((t: Tool) => ({
           type: "function",
           function: {
             name: t.name,
@@ -242,7 +265,7 @@ class MiniMaxClient implements LLMClient {
       throw new Error(`MiniMax API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as OpenAIResponse;
     const choice = data.choices[0];
 
     return {
@@ -259,7 +282,10 @@ class MiniMaxClient implements LLMClient {
         if (typeof m.content === "string") {
           return { role: m.role, content: m.content };
         }
-        const text = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+        const text = m.content
+          .filter((b: ContentBlock) => b.type === "text")
+          .map((b: ContentBlock) => b.text || "")
+          .join("");
         return { role: m.role, content: text };
       });
   }

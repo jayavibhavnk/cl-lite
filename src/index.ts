@@ -5,8 +5,16 @@ import {
   MemoryManager,
   SkillsRegistry,
   Agent,
-  CLI,
 } from "./core/index.js";
+import {
+  printBanner,
+  printUserMessage,
+  printAssistantMessage,
+  printError,
+  printInfo,
+  Spinner,
+  ThinkingAnimation,
+} from "./core/ui.js";
 import {
   bashTool,
   readTool,
@@ -17,6 +25,22 @@ import {
   webFetchTool,
   webSearchTool,
 } from "./tools/index.js";
+import * as readline from "readline";
+
+// ANSI color codes
+const colors = {
+  pink: "\x1b[38;5;206m",
+  pinkBright: "\x1b[38;5;219m",
+  cyan: "\x1b[38;5;87m",
+  green: "\x1b[38;5;84m",
+  yellow: "\x1b[38;5;227m",
+  red: "\x1b[38;5;203m",
+  gray: "\x1b[38;5;245m",
+  white: "\x1b[38;5;15m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  reset: "\x1b[0m",
+};
 
 // Register all tools
 const tools = [
@@ -31,33 +55,30 @@ const tools = [
 ];
 
 async function main() {
-  console.log(`
-╔═══════════════════════════════════════╗
-║           CL-Lite v0.1.0              ║
-║     Lightweight Claude Code Clone     ║
-╚═══════════════════════════════════════╝
-`);
+  printBanner();
 
   // Check for API key
   const config = getProviderConfig();
   if (!config.apiKey) {
-    console.error("Error: No API key found.");
-    console.error("Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENAI_BASE_URL");
-    console.error("");
-    console.error("Usage:");
-    console.error("  ANTHROPIC_API_KEY=sk-... npx cl-lite");
-    console.error("  OPENAI_API_KEY=sk-... MODEL_NAME=gpt-4 npx cl-lite");
+    printError("No API key found.");
+    printInfo("Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, or MINIMAX_API_KEY");
+    console.log(`
+Usage:
+  ${colors.pink}ANTHROPIC_API_KEY${colors.reset}=sk-... npx cl-lite
+  ${colors.pink}OPENAI_API_KEY${colors.reset}=sk-... ${colors.pink}MODEL_NAME${colors.reset}=gpt-4 npx cl-lite
+  ${colors.pink}MINIMAX_API_KEY${colors.reset}=... npx cl-lite
+`);
     process.exit(1);
   }
 
-  console.log(`Provider: ${config.provider}`);
-  console.log(`Model: ${config.modelName}`);
+  console.log(`${colors.gray}Provider:${colors.reset} ${colors.cyan}${config.provider}${colors.reset}`);
+  console.log(`${colors.gray}Model:${colors.reset} ${colors.cyan}${config.modelName}${colors.reset}`);
+  console.log(`${colors.gray}Max Tokens:${colors.reset} ${colors.cyan}${config.maxTokens}${colors.reset}`);
   console.log("");
 
   // Initialize components
   const memory = new MemoryManager();
   const skills = new SkillsRegistry();
-  const cli = new CLI({ prompt: "cl-lite> " });
 
   const agent = new Agent({
     providerConfig: config,
@@ -67,71 +88,86 @@ async function main() {
     systemPrompt: "You are CL-Lite, a concise and practical CLI assistant.",
   });
 
+  // Create readline interface
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: `${colors.pink}cl-lite${colors.reset} ${colors.gray}›${colors.reset} `,
+  });
+
   // Check for initial prompt from args
   const initialPrompt = process.argv.slice(2).join(" ");
   if (initialPrompt) {
-    cli.print(`User: ${initialPrompt}\n`);
-    const response = await agent.run(initialPrompt);
-    cli.printMarkdown(response);
-    await cli.close();
+    printUserMessage(initialPrompt);
+    const thinking = new ThinkingAnimation();
+    thinking.start();
+    try {
+      const response = await agent.run(initialPrompt);
+      thinking.stop();
+      printAssistantMessage(response);
+    } catch (error) {
+      thinking.stop();
+      printError((error as Error).message);
+    }
     return;
   }
 
   // Interactive mode
-  cli.print("Type your message or /help for commands. Press Ctrl+C to exit.\n");
+  console.log(`${colors.dim}Type your message or /help for commands. Press Ctrl+C to exit.${colors.reset}\n`);
 
-  while (true) {
-    try {
-      const input = await cli.prompt();
-
+  const mainLoop = async () => {
+    for await (const input of rl) {
       if (!input.trim()) continue;
 
       // Handle built-in commands
       if (input === "/help") {
-        cli.print(`
-Available commands:
-  /help     - Show this help message
-  /skills   - List available skills
-  /memory   - Show current memory context
-  /clear    - Clear conversation history
-  /quit     - Exit the program
+        console.log(`
+${colors.bold}${colors.pink}Available Commands:${colors.reset}
+  ${colors.cyan}/help${colors.reset}     - Show this help message
+  ${colors.cyan}/skills${colors.reset}   - List available skills
+  ${colors.cyan}/memory${colors.reset}   - Show current memory context
+  ${colors.cyan}/clear${colors.reset}    - Clear conversation history
+  ${colors.cyan}/quit${colors.reset}     - Exit the program
 
-Skills (prefix message with skill name):
-  /implement, /debug, /explain, /review, /refactor, /test
+${colors.bold}${colors.pink}Skills (prefix message with skill name):${colors.reset}
+  ${colors.cyan}/implement${colors.reset}, ${colors.cyan}/debug${colors.reset}, ${colors.cyan}/explain${colors.reset}, ${colors.cyan}/review${colors.reset}, ${colors.cyan}/refactor${colors.reset}, ${colors.cyan}/test${colors.reset}
 `);
+        rl.prompt();
         continue;
       }
 
       if (input === "/skills") {
         const skillList = skills.getEnabled();
-        cli.print("Available skills:");
+        console.log(`\n${colors.bold}${colors.pink}Available Skills:${colors.reset}`);
         for (const skill of skillList) {
-          cli.print(`  /${skill.name} - ${skill.description}`);
+          console.log(`  ${colors.cyan}/${skill.name}${colors.reset} - ${skill.description}`);
         }
-        cli.print("");
+        console.log("");
+        rl.prompt();
         continue;
       }
 
       if (input === "/memory") {
         const context = memory.getContext();
         if (context) {
-          cli.print(context);
+          console.log(`\n${context}\n`);
         } else {
-          cli.print("(No memory context)");
+          console.log(`\n${colors.dim}(No memory context)${colors.reset}\n`);
         }
-        cli.print("");
+        rl.prompt();
         continue;
       }
 
       if (input === "/clear") {
         memory.clearAll();
-        cli.print("Memory cleared.\n");
+        console.log(`\n${colors.green}Memory cleared.${colors.reset}\n`);
+        rl.prompt();
         continue;
       }
 
       if (input === "/quit" || input === "/exit") {
-        await cli.close();
-        return;
+        console.log(`\n${colors.dim}Goodbye!${colors.reset}\n`);
+        break;
       }
 
       // Check for skill prefix
@@ -143,21 +179,32 @@ Skills (prefix message with skill name):
         }
       }
 
-      // Run agent
-      const response = await agent.run(message);
-      cli.printMarkdown(response);
-    } catch (error) {
-      if ((error as { code?: string }).code === "EOF") {
-        break;
-      }
-      cli.printError((error as Error).message);
-    }
-  }
+      // Print user message
+      printUserMessage(input);
 
-  await cli.close();
+      // Run agent with thinking animation
+      const thinking = new ThinkingAnimation();
+      thinking.start();
+
+      try {
+        const response = await agent.run(message);
+        thinking.stop();
+        printAssistantMessage(response);
+      } catch (error) {
+        thinking.stop();
+        printError((error as Error).message);
+        console.log("");
+      }
+
+      rl.prompt();
+    }
+  };
+
+  await mainLoop();
+  rl.close();
 }
 
 main().catch((error) => {
-  console.error("Fatal error:", error);
+  printError(`Fatal error: ${error.message}`);
   process.exit(1);
 });

@@ -78,10 +78,11 @@ export class Agent {
       // Execute tool calls
       for (const toolCall of toolCalls) {
         const result = await this.executeTool(toolCall);
+        const toolId = toolCall.id || `call_${Date.now()}`;
         messages.push({
           role: "tool",
           content: result.content,
-          tool_call_id: toolCall.id,
+          tool_call_id: toolId,
         });
       }
     }

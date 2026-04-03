@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { resolve, join } from "path";
 
 export interface Skill {
@@ -68,7 +68,7 @@ function loadCustomSkills(): Skill[] {
 
   for (const file of files) {
     try {
-      const content = readdirSync(join(skillsDir, file), { encoding: "utf-8" }).toString();
+      const content = readFileSync(join(skillsDir, file), { encoding: "utf-8" });
       // Format: first line is name, second is description, rest is prompt
       const lines = content.split("\n");
       if (lines.length >= 3) {
